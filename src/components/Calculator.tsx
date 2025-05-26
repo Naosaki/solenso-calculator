@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { filterCompatibleInverters, calculatePanelParameters } from '../lib/calculations';
-import { FileText, AlertTriangle, CheckCircle2, HelpCircle, Loader2, Info, Download } from 'lucide-react';
+import { FileText, AlertTriangle, CheckCircle2, HelpCircle, Loader2, Info } from 'lucide-react';
 import type { MicroInverter, PanelInputs } from '../types';
-import { jsPDF } from 'jspdf';
 import { useLanguage } from '../hooks/useLanguage';
 
 const DEFAULT_PANEL_VALUES = {
@@ -65,7 +64,7 @@ export function Calculator() {
     return parseFloat(normalizedValue);
   };
 
-  const formatDecimalOutput = (value: number): string => {
+  const formatDecimalOutput = (value: number | string): string => {
     // Format number with comma as decimal separator
     return value.toString().replace('.', ',');
   };
@@ -240,91 +239,7 @@ export function Calculator() {
     }
   };
 
-  const downloadPDF = () => {
-    if (!results || !panelInputs || Object.keys(panelInputs).length < 6) return;
 
-    const doc = new jsPDF();
-    let yPos = 20;
-    const lineHeight = 7;
-
-    // Add title
-    doc.setFontSize(16);
-    doc.text(t('calculator.title'), 20, yPos);
-    yPos += lineHeight * 2;
-
-    // Add panel characteristics
-    doc.setFontSize(12);
-    doc.text(t('calculator.fields.title'), 20, yPos);
-    yPos += lineHeight;
-    doc.setFontSize(10);
-
-    const characteristics = [
-      { label: 'Voc', value: parseDecimalInput(String(panelInputs.voc)), unit: 'V' },
-      { label: 'Vmpp', value: parseDecimalInput(String(panelInputs.vmpp)), unit: 'V' },
-      { label: 'Isc', value: parseDecimalInput(String(panelInputs.isc)), unit: 'A' },
-      { label: 'Impp', value: parseDecimalInput(String(panelInputs.impp)), unit: 'A' },
-      { label: t('calculator.fields.coef_voc'), value: parseDecimalInput(String(panelInputs.coef_voc)), unit: '%/°C' },
-      { label: t('calculator.fields.coef_isc'), value: parseDecimalInput(String(panelInputs.coef_isc)), unit: '%/°C' }
-    ];
-
-    characteristics.forEach(({ label, value, unit }) => {
-      doc.text(`${label}: ${value?.toFixed(2)}${unit}`, 30, yPos);
-      yPos += lineHeight;
-    });
-    yPos += lineHeight;
-
-    // Add calculated values
-    const numericInputs = Object.entries(panelInputs).reduce((acc, [key, value]) => {
-      acc[key as keyof PanelInputs] = typeof value === 'string' ? parseDecimalInput(value) : value;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const panelInputsWithTemp = {
-      ...numericInputs,
-      tmin: -10,
-      tmax: 70
-    } as PanelInputs;
-    
-    const calculated = calculatePanelParameters(panelInputsWithTemp);
-    doc.setFontSize(12);
-    doc.text(t('calculator.results.calculatedValues.title'), 20, yPos);
-    yPos += lineHeight;
-    doc.setFontSize(10);
-
-    const calculatedValues = [
-      { label: t('calculator.results.calculatedValues.vmax'), value: calculated.vmax.toFixed(1), unit: 'V' },
-      { label: t('calculator.results.calculatedValues.vmin'), value: calculated.vmin.toFixed(1), unit: 'V' },
-      { label: t('calculator.results.calculatedValues.vmpp_min'), value: calculated.vmpp_min.toFixed(1), unit: 'V' },
-      { label: t('calculator.results.calculatedValues.isc_max'), value: calculated.isc_max.toFixed(1), unit: 'A' }
-    ];
-
-    calculatedValues.forEach(({ label, value, unit }) => {
-      doc.text(`${label}: ${value}${unit}`, 30, yPos);
-      yPos += lineHeight;
-    });
-    yPos += lineHeight;
-
-    // Add compatible inverters
-    if (results.compatible.length > 0) {
-      doc.setFontSize(12);
-      doc.text(`${t('calculator.results.compatible')} (${results.compatible.length})`, 20, yPos);
-      yPos += lineHeight;
-      doc.setFontSize(10);
-      results.compatible.forEach(inverter => {
-        doc.text(`• ${inverter.nom}`, 30, yPos);
-        yPos += lineHeight;
-        doc.text(`  Tension d'entrée: ${inverter.vmin}V - ${inverter.vmax}V`, 30, yPos);
-        yPos += lineHeight;
-        doc.text(`  VMPP minimale: ${inverter.vmpp_min}V`, 30, yPos);
-        yPos += lineHeight;
-        doc.text(`  Courant max (Isc): ${inverter.isc_max}A`, 30, yPos);
-        yPos += lineHeight * 1.5;
-      });
-    }
-
-    // Save the PDF
-    doc.save('resultats-compatibilite-solenso.pdf');
-  };
 
   const renderFieldTooltip = (field: keyof PanelInputs) => {
     if (activeTooltip !== field) return null;
@@ -336,7 +251,7 @@ export function Calculator() {
     );
   };
 
-  const renderField = (field: keyof PanelInputs, label: string, unit: string) => (
+  const renderField = (field: keyof PanelInputs, _label: string, unit: string) => (
     <div className="relative">
       <div className="flex justify-between items-start mb-1">
         <label className="block text-sm font-medium text-gray-700">
@@ -469,19 +384,12 @@ export function Calculator() {
 
       {results && (
         <div id="results" className="space-y-8">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-start items-center">
             <button
               onClick={() => setResults(null)}
               className="px-4 py-2 text-gray-600 hover:text-gray-900 flex items-center"
             >
               ← {t('calculator.results.backToForm')}
-            </button>
-            <button
-              onClick={downloadPDF}
-              className="flex items-center px-4 py-2 bg-black text-white rounded-md hover:bg-gray-900"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              {t('calculator.results.downloadPdf')}
             </button>
           </div>
 
@@ -626,19 +534,19 @@ export function Calculator() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
                       <span className="font-medium">{t('calculator.results.calculatedValues.vmax')}:</span>
-                      <span className="ml-2">{formatDecimalOutput(String(calculated.vmax.toFixed(1)))}V</span>
+                      <span className="ml-2">{formatDecimalOutput(calculated.vmax.toFixed(1))}V</span>
                     </div>
                     <div>
                       <span className="font-medium">{t('calculator.results.calculatedValues.vmin')}:</span>
-                      <span className="ml-2">{formatDecimalOutput(String(calculated.vmin.toFixed(1)))}V</span>
+                      <span className="ml-2">{formatDecimalOutput(calculated.vmin.toFixed(1))}V</span>
                     </div>
                     <div>
                       <span className="font-medium">{t('calculator.results.calculatedValues.vmpp_min')}:</span>
-                      <span className="ml-2">{formatDecimalOutput(String(calculated.vmpp_min.toFixed(1)))}V</span>
+                      <span className="ml-2">{formatDecimalOutput(calculated.vmpp_min.toFixed(1))}V</span>
                     </div>
                     <div>
                       <span className="font-medium">{t('calculator.results.calculatedValues.isc_max')}:</span>
-                      <span className="ml-2">{formatDecimalOutput(String(calculated.isc_max.toFixed(1)))}A</span>
+                      <span className="ml-2">{formatDecimalOutput(calculated.isc_max.toFixed(1))}A</span>
                     </div>
                   </div>
                 );
